@@ -12,6 +12,8 @@ Local automation for exporting and monitoring Maizuo reports for SpicyComedy ven
   - `被合并明细`
   - `场馆合计`
 - Sends sold-out text alerts to Feishu.
+- Triggers the sold-out alert when `剩余可售总票房票数(U) <= 2` (override with
+  `MAIZUO_ALERT_REMAINING_THRESHOLD`).
 - Optionally sends the final merged Excel workbook to a Feishu group.
 - When the Chrome Maizuo session expires, uses PyAutoGUI to drag the login
   slider, clicks `登录`, and retries the interrupted monitoring task once.

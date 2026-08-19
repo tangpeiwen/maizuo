@@ -94,7 +94,7 @@ FEISHU_CHAT_ID=...
 - `automation/pyautogui_maizuo_login.py` performs the required
   `moveTo`/`dragTo` slider gesture and login-button click.
 - `automation/merge_overall_operate_key_tickets.mjs` builds the final merged workbook.
-- `automation/check_overall_sold_out_alerts.mjs` scans `被合并明细` for rows where `剩余可售总票房票数(U) === 0`.
+- `automation/check_overall_sold_out_alerts.mjs` scans `被合并明细` for rows where `剩余可售总票房票数(U) <= 2`.
 - `automation/notify_feishu_sold_out.mjs` sends Feishu webhook messages.
 - `automation/send_feishu_file.mjs` uploads the final merged workbook and sends it to a Feishu group as a file message.
 - `automation/run_overall_full_report.mjs` runs fetch + merge.

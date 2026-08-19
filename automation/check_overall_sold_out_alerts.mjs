@@ -16,6 +16,11 @@ const alertVenues = (process.env.MAIZUO_ALERT_VENUES || "新天地")
   .split(",")
   .map(normalize)
   .filter(Boolean);
+const remainingTicketThreshold = Number(process.env.MAIZUO_ALERT_REMAINING_THRESHOLD || 2);
+
+if (!Number.isFinite(remainingTicketThreshold) || remainingTicketThreshold < 0) {
+  throw new Error(`Invalid MAIZUO_ALERT_REMAINING_THRESHOLD: ${process.env.MAIZUO_ALERT_REMAINING_THRESHOLD}`);
+}
 
 function normalize(value) {
   return String(value ?? "").trim();
@@ -100,8 +105,9 @@ for (const row of values.slice(1)) {
   const venue = normalize(row[venueIndex]);
   if (alertVenues.length > 0 && !alertVenues.includes(venue)) continue;
 
-  const remaining = Number(row[remainingIndex]);
-  if (remaining !== 0) continue;
+  const remainingRaw = normalize(row[remainingIndex]);
+  const remaining = Number(remainingRaw);
+  if (!remainingRaw || !Number.isFinite(remaining) || remaining > remainingTicketThreshold) continue;
   const showDate = extractDate(row[showtimeIndex]);
   if (!includeAllDates && (!showDate || showDate < alertFromDate)) continue;
 
@@ -137,6 +143,8 @@ console.log(
       statePath,
       dateFilter: includeAllDates ? "all-dates" : `showtime >= ${alertFromDate}`,
       venueFilter: alertVenues.length > 0 ? alertVenues : "all-venues",
+      remainingTicketThreshold,
+      alertCondition: `剩余可售总票房票数(U) <= ${remainingTicketThreshold}`,
       soldOutCount: soldOutRows.length,
       newAlertCount: newAlerts.length,
       newAlerts,
