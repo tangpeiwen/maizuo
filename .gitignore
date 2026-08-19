@@ -1,0 +1,22 @@
+.DS_Store
+
+# Local editor and agent history
+.vscode/
+.specstory/
+.cursorindexingignore
+
+# Runtime outputs and private state
+outputs/
+state/
+
+# Local secrets
+.env
+.env.*
+!.env.example
+
+# Dependencies and caches
+node_modules
+node_modules*/
+node_modules *
+__pycache__/
+*.pyc
