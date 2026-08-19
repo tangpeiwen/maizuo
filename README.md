@@ -13,6 +13,10 @@ Local automation for exporting and monitoring Maizuo reports for SpicyComedy ven
   - `场馆合计`
 - Sends sold-out text alerts to Feishu.
 - Optionally sends the final merged Excel workbook to a Feishu group.
+- When the Chrome Maizuo session expires, uses PyAutoGUI to drag the login
+  slider, clicks `登录`, and retries the interrupted monitoring task once.
+- For notification-enabled tasks, sends a Feishu message after successful
+  automatic re-login; if recovery fails, asks for a manual Chrome login.
 
 ## Prerequisites
 
@@ -23,6 +27,13 @@ Local automation for exporting and monitoring Maizuo reports for SpicyComedy ven
 ```
 
 - Keep normal Google Chrome logged into Maizuo with at least one `maizuo.maitix.com` tab open.
+- Install PyAutoGUI for the system Python used by the automation and allow that
+  Python process to control the Mac in **System Settings → Privacy & Security → Accessibility**:
+
+```bash
+/usr/bin/python3 -m pip install --user pyautogui
+```
+
 - Enable Chrome menu:
 
 ```text
@@ -48,6 +59,18 @@ Sold-out alert dry-run:
 ```bash
 npm run maizuo:overall:alert
 ```
+
+Run the automatic login recovery directly:
+
+```bash
+npm run maizuo:login:auto
+```
+
+The login-status check now attempts the same automatic recovery before it
+fails. Its `--notify` variant sends the automatic-login result to Feishu:
+
+- Success: `检测到登录失效，已重新自动登录。`
+- Failure: `麦座登录失效，自动登录失败` and a request to log in manually.
 
 Sold-out alert with Feishu notification and dedupe state commit:
 

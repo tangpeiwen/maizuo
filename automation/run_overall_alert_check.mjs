@@ -39,18 +39,6 @@ function run(script, args = []) {
   }
 }
 
-function notifyLoginExpired(error) {
-  if (!notify) return;
-  const report = {
-    type: "login_error",
-    error: String(error && error.message ? error.message : error),
-  };
-  const notifyOutput = runCapture("notify_feishu_sold_out.mjs", [], {
-    input: JSON.stringify(report),
-  });
-  console.log(notifyOutput.trim());
-}
-
 function notifyChromeJsDisabled(error) {
   if (!notify) return;
   const report = {
@@ -92,7 +80,31 @@ function runCapture(script, args = [], options = {}) {
   return result.stdout;
 }
 
-try {
+function runAutoLogin() {
+  const output = runCapture("auto_login_maizuo.mjs");
+  if (output.trim()) console.log(output.trim());
+  return output.trim();
+}
+
+function notifyLoginResult(type, error = null) {
+  if (!notify) return;
+  const previousExitCode = process.exitCode;
+  try {
+    const output = runCapture("notify_feishu_sold_out.mjs", [], {
+      input: JSON.stringify({
+        type,
+        source: "麦座整体运营告警任务",
+        error: error ? String(error.message || error) : "",
+      }),
+    });
+    if (output.trim()) console.log(output.trim());
+  } catch (notifyError) {
+    process.exitCode = previousExitCode;
+    console.error(`Failed to send login recovery notification: ${notifyError.message || notifyError}`);
+  }
+}
+
+function runWorkflow() {
   loadLocalEnv();
   run("fetch_overall_operate_report_api.mjs");
   run("merge_overall_operate_key_tickets.mjs");
@@ -111,7 +123,13 @@ try {
   }
 
   console.log(`Overall alert check completed (${commit ? "commit" : "dry-run"}${notify ? ", notify" : ""}).`);
-} catch (error) {
+}
+
+function isLoginExpiredError(error) {
+  return process.exitCode === 20 || /exit code 20|UN_LOGIN_ERROR|登陆超时|重新登陆|needsLogin/i.test(error.message || "");
+}
+
+function reportNonLoginFailure(error) {
   const isLoginExpired =
     process.exitCode === 20 || /exit code 20|UN_LOGIN_ERROR|登陆超时|重新登陆|needsLogin/i.test(error.message || "");
   const isChromeJsDisabled = /Allow JavaScript from Apple Events|Executing JavaScript through AppleScript is turned off/i.test(
@@ -136,13 +154,42 @@ try {
       console.error(`Failed to send Chrome-bridge notification: ${notifyError.message || notifyError}`);
     }
   }
-  if (isLoginExpired) {
-    try {
-      notifyLoginExpired(error);
-    } catch (notifyError) {
-      console.error(`Failed to send login-expired notification: ${notifyError.message || notifyError}`);
-    }
-  }
+  // Login expiry is handled by the automatic recovery branch, which sends its
+  // own success/failure result instead of a generic expiry notification.
+  if (isLoginExpired) process.exitCode = process.exitCode || 20;
   console.error(error.message || error);
   process.exitCode = process.exitCode || 1;
+}
+
+try {
+  runWorkflow();
+} catch (error) {
+  if (!isLoginExpiredError(error)) {
+    reportNonLoginFailure(error);
+  } else {
+    let recoverySucceeded = false;
+    try {
+      process.exitCode = 0;
+      console.log("Maizuo login expired; starting automatic slider login recovery.");
+      runAutoLogin();
+      recoverySucceeded = true;
+      notifyLoginResult("login_recovered");
+    } catch (recoveryError) {
+      notifyLoginResult("login_recovery_failed", recoveryError);
+      console.error(`Automatic Maizuo login recovery failed: ${recoveryError.message || recoveryError}`);
+      process.exitCode = process.exitCode || 20;
+    }
+
+    if (recoverySucceeded) {
+      try {
+        process.exitCode = 0;
+        runWorkflow();
+      } catch (retryError) {
+        if (isLoginExpiredError(retryError)) {
+          notifyLoginResult("login_recovery_failed", new Error("自动登录完成，但麦座 API 仍报告登录失效"));
+        }
+        reportNonLoginFailure(retryError);
+      }
+    }
+  }
 }

@@ -52,6 +52,12 @@ Sold-out alert dry-run:
 npm run maizuo:overall:alert
 ```
 
+Automatic login recovery:
+
+```bash
+npm run maizuo:login:auto
+```
+
 Sold-out alert with Feishu notification attempt:
 
 ```bash
@@ -82,6 +88,8 @@ FEISHU_CHAT_ID=...
 ## Important Files
 
 - `automation/fetch_overall_operate_report_api.mjs` fetches Maizuo overall operations data for 新天地 and 滨港商业中心 through the logged-in Chrome tab.
+- `automation/auto_login_maizuo.mjs` detects the login UI and coordinates PyAutoGUI recovery.
+- `automation/pyautogui_maizuo_login.py` performs the slider drag and login click.
 - `automation/merge_overall_operate_key_tickets.mjs` builds the final merged workbook.
 - `automation/check_overall_sold_out_alerts.mjs` scans `被合并明细` for rows where `剩余可售总票房票数(U) === 0`.
 - `automation/notify_feishu_sold_out.mjs` sends Feishu webhook messages.
@@ -114,4 +122,7 @@ Alert dedupe state is stored at:
 
 - If the JXA Chrome bridge cannot find a Maizuo tab, open `https://maizuo.maitix.com/boss/` in normal Chrome.
 - If Chrome says JavaScript through Apple Events is disabled, enable `View > Developer > Allow JavaScript from Apple Events`.
-- If the Maizuo session is expired, log in manually in Chrome, then rerun the command.
+- If the Maizuo session is expired, the login check and overall alert workflow
+  automatically drag the verification slider, click `登录`, and retry once.
+- Notification-enabled workflows report successful automatic re-login to
+  Feishu and request manual login when recovery fails.

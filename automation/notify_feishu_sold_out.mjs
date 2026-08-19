@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 
 const webhookUrl = process.env.FEISHU_WEBHOOK_URL || process.env.LARK_WEBHOOK_URL || "";
 const secret = process.env.FEISHU_BOT_SECRET || process.env.LARK_BOT_SECRET || "";
+const preview = process.argv.includes("--preview");
 
 function readStdin() {
   return new Promise((resolve, reject) => {
@@ -33,13 +34,25 @@ function formatAlert(alert) {
 }
 
 function buildMessage(report) {
-  if (report.type === "login_error") {
+  if (report.type === "login_recovered") {
     return [
-      "麦座登录已失效，需要重新登录",
+      "麦座登录状态提醒",
       `时间：${new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })}`,
+      "检测到登录失效，已重新自动登录。",
+      report.source ? `任务：${report.source}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  if (report.type === "login_recovery_failed") {
+    return [
+      "麦座登录失效，自动登录失败",
+      `时间：${new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })}`,
+      report.source ? `任务：${report.source}` : "",
       report.error ? `错误：${report.error}` : "",
       "",
-      "请在 Chrome 中重新登录麦座，并保持一个 maizuo.maitix.com 标签页打开。",
+      "请在 Chrome 中手动登录麦座，并保持一个 maizuo.maitix.com 标签页打开。",
     ]
       .filter(Boolean)
       .join("\n");
@@ -86,8 +99,13 @@ function buildMessage(report) {
 const input = await readStdin();
 const report = JSON.parse(input);
 
+if (preview) {
+  console.log(JSON.stringify({ ok: true, preview: true, type: report.type || "sold_out", text: buildMessage(report) }, null, 2));
+  process.exit(0);
+}
+
 if (
-  !["login_error", "chrome_js_error", "chrome_bridge_error"].includes(report.type) &&
+  !["login_recovered", "login_recovery_failed", "chrome_js_error", "chrome_bridge_error"].includes(report.type) &&
   (!report.newAlerts || report.newAlerts.length === 0)
 ) {
   console.log(JSON.stringify({ ok: true, sent: false, reason: "no-new-alerts" }, null, 2));

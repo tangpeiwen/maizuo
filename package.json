@@ -2,6 +2,7 @@
   "scripts": {
     "maizuo:overall:full": "node automation/run_overall_full_report.mjs",
     "maizuo:overall:full:feishu": "node automation/run_overall_full_report.mjs --feishu",
+    "maizuo:login:auto": "node automation/auto_login_maizuo.mjs",
     "maizuo:login:check": "node automation/check_maizuo_login_status.mjs",
     "maizuo:login:check:notify": "node automation/check_maizuo_login_status.mjs --notify",
     "maizuo:overall:alert": "node automation/run_overall_alert_check.mjs",

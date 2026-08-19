@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 const workspaceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const nodeBin = process.execPath;
 const notify = process.argv.includes("--notify");
+const autoLoginPath = path.join(workspaceRoot, "automation", "auto_login_maizuo.mjs");
 
 function loadLocalEnv() {
   const envPath = path.join(workspaceRoot, ".env");
@@ -171,10 +172,10 @@ function classifyError(error) {
   if (/401|403|登录|login|unauthorized|forbidden|UN_LOGIN_ERROR|登陆超时|重新登陆|needsLogin/i.test(message)) {
     return "login_error";
   }
-  return "login_error";
+  return "check_error";
 }
 
-function notifyFailure(type, error) {
+function notifyReport(report) {
   if (!notify) return null;
   const notifyPath = path.join(workspaceRoot, "automation", "notify_feishu_sold_out.mjs");
   const result = spawnSync(
@@ -183,10 +184,7 @@ function notifyFailure(type, error) {
     {
       cwd: workspaceRoot,
       encoding: "utf8",
-      input: JSON.stringify({
-        type,
-        error: String(error && error.message ? error.message : error),
-      }),
+      input: JSON.stringify(report),
       stdio: ["pipe", "pipe", "inherit"],
     },
   );
@@ -196,6 +194,41 @@ function notifyFailure(type, error) {
     throw new Error(`notify_feishu_sold_out.mjs failed with exit code ${result.status}`);
   }
   return result.stdout.trim();
+}
+
+function notifyFailure(type, error) {
+  if (type === "login_error") return null;
+  return notifyReport({
+    type,
+    error: String(error && error.message ? error.message : error),
+  });
+}
+
+function safeNotifyLoginResult(type, error = null) {
+  try {
+    return notifyReport({
+      type,
+      source: "麦座登录状态检查",
+      error: error ? String(error.message || error) : "",
+    });
+  } catch (notifyError) {
+    console.error(`Failed to send login recovery notification: ${notifyError.message || notifyError}`);
+    return null;
+  }
+}
+
+function autoLogin() {
+  const result = spawnSync(nodeBin, [autoLoginPath], {
+    cwd: workspaceRoot,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "inherit"],
+  });
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    throw new Error(`auto_login_maizuo.mjs failed with exit code ${result.status}`);
+  }
+  const output = result.stdout.trim();
+  return output ? JSON.parse(output.split(/\r?\n/).at(-1)) : { ok: true };
 }
 
 async function main() {
@@ -220,7 +253,27 @@ async function main() {
     cooperateId: "",
   };
 
-  const response = await postJsonViaChrome("https://bi.maitix.com/rpt/ReportSearchOption/projectEventList", payload);
+  let recoveredLogin = null;
+  let loginNotification = null;
+  let response;
+  try {
+    response = await postJsonViaChrome("https://bi.maitix.com/rpt/ReportSearchOption/projectEventList", payload);
+  } catch (error) {
+    if (classifyError(error) !== "login_error") throw error;
+    try {
+      recoveredLogin = autoLogin();
+    } catch (recoveryError) {
+      safeNotifyLoginResult("login_recovery_failed", recoveryError);
+      throw recoveryError;
+    }
+    try {
+      response = await postJsonViaChrome("https://bi.maitix.com/rpt/ReportSearchOption/projectEventList", payload);
+    } catch (retryError) {
+      safeNotifyLoginResult("login_recovery_failed", new Error("自动登录完成，但麦座 API 仍报告登录失效"));
+      throw retryError;
+    }
+    loginNotification = safeNotifyLoginResult("login_recovered");
+  }
   const counts = flattenProjectEvents(response.data || []);
   if (!Array.isArray(response.data)) {
     throw new Error("Maizuo login check response missing data array");
@@ -233,6 +286,8 @@ async function main() {
         type: "maizuo_login_check",
         checkedAt: new Date().toISOString(),
         venueId,
+        recoveredLogin,
+        loginNotification,
         ...counts,
       },
       null,
